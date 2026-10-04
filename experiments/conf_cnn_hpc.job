@@ -1,0 +1,91 @@
+#!/bin/bash
+#PBS -N onmar_cnn
+#PBS -l select=1:ncpus=24:ngpus=1
+#PBS -P CSCI1166
+#PBS -q gpu_1
+#PBS -l walltime=24:00:00
+#PBS -m abe
+#PBS -M mgerber0608@gmail.com
+#PBS -o onmar_cnn.out
+#PBS -e onmar_cnn.err
+
+# ---------------------------------------------------------------------------
+# OnMAR / OffMAR - CNN configuration application
+#
+# Where the time goes (measured on a 24-timestep CIFAR-10 run):
+#     48%  scoring GA candidate designs   <- parallelised across workers
+#     38%  timestep training              <- one model, GPU-bound
+#     10%  validation passes
+#      4%  meta-feature extraction
+#
+# So the useful parallelism is one worker per GPU scoring candidates
+# concurrently, not DataParallel on a single candidate. On a multi-GPU node
+# leave --candidate-workers unset and the application starts one worker per
+# visible GPU.
+#
+# Submit:
+#     qsub experiments/conf_cnn_hpc.job
+#
+# CPU-only queue: change the select line to `select=1:ncpus=24` and the queue
+# to `smp`; worker sizing falls back to half the allocated CPUs, with BLAS
+# threads divided between them so the workers do not oversubscribe the node.
+# ---------------------------------------------------------------------------
+
+set -euo pipefail
+
+PROJECT_DIR="${PBS_O_WORKDIR:-$HOME/OnMAR}"
+cd "$PROJECT_DIR"
+
+module purge
+module add chpc/python/anaconda/3-2019.10 || true
+module add chpc/cuda/11.8 || true
+
+# One environment for the applications and the four MAR variants. The
+# AutoSklearn baseline needs its own (see requirements.txt) because it pins an
+# incompatible scikit-learn.
+if [ ! -d venv ]; then
+    python3 -m venv venv
+    ./venv/bin/pip install --upgrade pip
+    ./venv/bin/pip install -r requirements-min.txt
+fi
+PYTHON="${PROJECT_DIR}/venv/bin/python"
+
+# Thread control. The candidate pool divides the allocation between its
+# workers itself, but these keep any library that reads them from grabbing
+# every core before the pool is even started.
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export TOKENIZERS_PARALLELISM=false
+
+# Pretrained donor weights are downloaded on first use. Compute nodes are
+# often offline, so point the cache at shared storage and pre-fetch on the
+# login node if needed; the run falls back to default initialisation and says
+# so if the download is unavailable.
+export TORCH_HOME="${PROJECT_DIR}/.torch_cache"
+
+echo "host           : $(hostname)"
+echo "allocated cpus : ${PBS_NCPUS:-unknown}"
+"$PYTHON" -c "import torch; print('gpus           :', torch.cuda.device_count())"
+
+RESULTS="${PROJECT_DIR}/results/$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$RESULTS"
+
+# --- CNN, all four approaches, all four datasets ---------------------------
+# --batches 0 trains a full epoch per timestep, which is what the thesis
+# specifies; the 150-batch cap exists only for laptop-scale checks.
+cd experiments/test
+
+for TECHNIQUE in onmar-accuracy onmar-design offmar-accuracy offmar-design; do
+    echo "=== ${TECHNIQUE} ==="
+    $PYTHON runner.py \
+        --application cnn \
+        --all-datasets \
+        --techniques "${TECHNIQUE}" \
+        --meta-learners knn rf xgboost \
+        --timesteps 80 \
+        --runs 30 \
+        --output-dir "${RESULTS}" \
+        2>&1 | tee "${RESULTS}/${TECHNIQUE}.log"
+done
+
+echo "results written to ${RESULTS}"
