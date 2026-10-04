@@ -1,0 +1,32 @@
+# Additional requirements for the video classification application.
+#
+# Install on top of requirements-min.txt:
+#
+#   pip install -r requirements-min.txt -r requirements-video.txt
+#
+# There is only one, and requirements-min.txt may already satisfy it: the TSN
+# implementation needs torch, torchvision and Pillow, and Pillow arrives as a
+# torchvision dependency. It is pinned here because the frame loader and the
+# generated dataset use it directly.
+#
+# Not installable from pip:
+#
+#   tf_model_zoo    Needed by base architectures 8 (BN-Inception) and 9
+#                   (InceptionV3) only. It is a directory of 442 files and
+#                   51.8 MB in the full OnMAR repository, not a package:
+#
+#                     git checkout 20e8a896 -- \
+#                         applications/video_configuration/tf_model_zoo
+#
+#                   VideoConfigurationApplication drops those two
+#                   architectures from the design space when it is absent and
+#                   reports them in
+#                   get_run_statistics()['excluded_design_options']. The five
+#                   ResNet and two VGG architectures need nothing extra.
+#
+# Video data is also not installable. UCF101, HMDB51 and LMTD must be
+# downloaded and have their frames extracted; this repository has no loader
+# that will do it. Use dataset_name='synthetic' to exercise the pipeline
+# without them.
+
+Pillow>=10.0.0

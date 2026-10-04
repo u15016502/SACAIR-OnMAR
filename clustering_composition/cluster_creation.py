@@ -1,23 +1,21 @@
 from sklearn.decomposition import PCA
-import markov_clustering as mc
-import networkx as nx
-import kmedoids
 from scipy.cluster.vq import vq
 import time
 from scipy.spatial.distance import cdist
 import gc
 from sklearn.cluster import KMeans
-from kneed import KneeLocator
 from sklearn.cluster import AgglomerativeClustering, FeatureAgglomeration, MeanShift, DBSCAN, AffinityPropagation, kmeans_plusplus, SpectralClustering, OPTICS, Birch, BisectingKMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import NearestNeighbors
-from applications.clustering_composition.cluster import cluster
+from sklearn.metrics import pairwise_distances
+from clustering_composition.cluster import cluster
 import numpy as np
 from scipy.spatial.distance import cdist
 import multiprocessing as mp
 import os
 from sklearn.cluster import MiniBatchKMeans
-from dataset.utils import get_images_for_label, get_image_indices_for_label
+from clustering_composition.label_utils import get_images_for_label, get_image_indices_for_label, new_identifiers, new_identifier
+from clustering_composition import optional_deps
 from copy import deepcopy
 
 # operates on a single image
@@ -109,30 +107,6 @@ def apply_distance_metric(distance_metric, a, b):
 		dis += np.mean(np.array(cdist(a, b, 'canberra')))
 		dis /=7
 
-def get_images_for_label(label, images, labels):
-	_images = []
-
-	for idx, image in enumerate(images):
-		if labels[idx] == label:
-			_images.append(deepcopy(image))
-		else:
-			if str(labels[idx]) == str(label):
-				_images.append(deepcopy(image))
-
-	return _images
-
-def get_image_indices_for_label(label, images, labels):
-	_images = []
-
-	for idx, image in enumerate(images):
-		if labels[idx] == label:
-			_images.append(deepcopy(idx))
-		else:
-			if str(labels[idx]) == str(label):
-				_images.append(deepcopy(idx))
-
-	return _images
-
 def mean_shift(data, clusters, membership_limit, num_clusters):
 	
 	min_samples = np.array(data).shape[1] * 2
@@ -148,7 +122,7 @@ def mean_shift(data, clusters, membership_limit, num_clusters):
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -177,6 +151,7 @@ def dbscan(data, clusters, membership_limit, distance_metric, num_clusters):
 
 	num_clusters = range(1, len(distances)+1)
 
+	KneeLocator = optional_deps.knee_locator()
 	kn = KneeLocator(num_clusters, distances, curve='convex', direction='increasing')
 
 	if kn.knee == len(distances):
@@ -195,7 +170,7 @@ def dbscan(data, clusters, membership_limit, distance_metric, num_clusters):
 
 	unique_labels = np.unique(clusters_.labels_)
 
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -217,7 +192,7 @@ def exemplar(data, clusters, membership_limit):
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -237,7 +212,7 @@ def minibatch(data, clusters, distance_metric, membership_limit, num_clusters):
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -252,13 +227,21 @@ def kmediods(data, clusters, distance_metric, membership_limit, num_clusters):
 
 	lf = lambda dataset_instance: flatten_or_return(dataset_instance, 1)
 	data_ = np.array(list(map(lf, data)))
-	# diss = pairwise_distances(data_, metric=get_distance_metric(distance_metric))
 
-	clusters_ = kmedoids.fasterpam(data_, medoids=int(medoids), max_iter=2, init='random')
+	# fasterpam takes a square dissimilarity matrix, not a data matrix. The
+	# line that built it was commented out and ``data_`` passed in its place,
+	# which made the Rust extension abort the process with
+	# "assertion left == right failed: 48 != 784" - the instance count against
+	# the feature count - rather than raise something catchable. Restored,
+	# which is also what makes this component honour the distance-metric gene.
+	diss = pairwise_distances(data_, metric=get_distance_metric(distance_metric))
+
+	kmedoids = optional_deps.kmedoids()
+	clusters_ = kmedoids.fasterpam(diss, medoids=int(medoids), max_iter=2, init='random')
 	clusters_.labels = clusters_.labels.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_.labels)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels):
 		for idx2, ul in enumerate(unique_labels):
@@ -278,9 +261,10 @@ def markov_clustering(data, clusters, distance_metric, membership_limit):
 					np.max(i)
 				) for idx, i in enumerate(data_)}
 
+	mc, nx = optional_deps.markov()
 	network = nx.random_geometric_graph(numnodes, 0.3, pos=positions)
 
-	matrix = nx.to_scipy_sparse_matrix(network)
+	matrix = optional_deps.networkx_sparse_matrix(network)
 
 	for inflation in [i / 10 for i in range(15, 26)]:
 		result = mc.run_mcl(matrix, inflation=inflation)
@@ -290,7 +274,7 @@ def markov_clustering(data, clusters, distance_metric, membership_limit):
 	result = mc.run_mcl(matrix, inflation=2.1)
 	clusters_ = mc.get_clusters(result)
 	unique_labels = range(0,len(clusters_))
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	new_clustering = []
 
@@ -355,7 +339,7 @@ def vector_quantization(data, clusters, distance_metric, membership_limit):
 
 	unique_labels = np.unique(labels_)
 
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -373,7 +357,7 @@ def spectral_clustering(data, clusters, distance_metric, membership_limit, n_clu
 	clusters_ = spec.fit(data_)
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -393,7 +377,7 @@ def agglomerative_clustering(data, clusters, distance_metric, membership_limit, 
 	clusters_ = wrd.fit(data_)
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):

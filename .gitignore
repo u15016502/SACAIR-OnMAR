@@ -1,0 +1,26 @@
+# Datasets and generated data.
+#
+# data/ holds the torchvision downloads (MNIST, CIFAR) and the video
+# application's generated dataset. Both are reproducible from code - the
+# loaders download on first use, and video_configuration/synthetic.py
+# regenerates its frames - so none of it belongs in the repository. It reaches
+# ~435 MB after one clustering run and one video run.
+data/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Experiment output
+experiments/test/results/
+
+# Editor and OS clutter
+.DS_Store
+.idea/
+.vscode/

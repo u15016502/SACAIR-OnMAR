@@ -1,4 +1,4 @@
-from applications.clustering_composition.cluster import cluster
+from clustering_composition.cluster import cluster
 import numpy as np
 import random
 from scipy.spatial.distance import cdist 

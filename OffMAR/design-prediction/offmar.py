@@ -185,7 +185,8 @@ class OffMARDesignPrediction:
         print(f"Knowledge repository size: {pruned_size}")
         if self.prune_info.get('relaxed'):
             print(
-                f"  Note: nothing reached θp={self.theta_p} (best was "
+                f"  Note: too few entries reached θp={self.theta_p} to "
+                f"fit on (best was "
                 f"{self.prune_info['best_performance']:.4f}); kept the "
                 f"{self.prune_info['kept']} best entries so the meta-learner "
                 f"still has something to learn from"
@@ -438,8 +439,15 @@ class OffMARDesignPrediction:
         """Create and train k-Nearest Neighbors meta-learner."""
         from sklearn.neighbors import KNeighborsRegressor
 
+        # k is clamped to the repository size, as the other three approaches
+        # already do. Phase 1 contributes only timesteps/2 entries, and
+        # scikit-learn raises outright when k exceeds the number of samples
+        # fitted ("Expected n_neighbors <= n_samples_fit"), so a short run
+        # crashed here rather than falling back to the neighbours it has.
         k = self.meta_learner_params.get('k', 5)
-        knn = KNeighborsRegressor(n_neighbors=k, weights='distance')
+        knn = KNeighborsRegressor(
+            n_neighbors=max(1, min(k, len(X))), weights='distance'
+        )
         knn.fit(X, y)
         return knn
 

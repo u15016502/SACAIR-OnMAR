@@ -1,0 +1,32 @@
+# Additional requirements for the clustering composition application.
+#
+# Install on top of requirements-min.txt:
+#
+#   pip install -r requirements-min.txt -r requirements-clustering.txt
+#
+# Without these, ClusteringCompositionApplication still runs: it drops the
+# design options it cannot execute from the design space and reports them in
+# get_run_statistics()['excluded_design_options']. The thesis design space is
+# only complete with all of them installed.
+#
+# Which option needs what:
+#
+#   tensorflow, keras        feature_extraction 0-4 (ResNet50, InceptionV3,
+#                            DenseNet121, Xception, VGG16 features)
+#   opencv-contrib-python    feature_extraction 6 (SIFT) and 8 (BRIEF).
+#                            BRIEF needs cv2.xfeatures2d, which ships only in
+#                            the contrib build - plain opencv-python covers
+#                            SIFT but not BRIEF.
+#   kneed                    cluster_creation 2 (DBSCAN; locates the knee of
+#                            the k-distance curve to pick eps)
+#   kmedoids                 cluster_creation 4 (k-medoids, FasterPAM)
+#   markov_clustering        cluster_addition 4 (Markov clustering)
+#   networkx                 cluster_addition 4 (builds the graph MCL runs on)
+
+tensorflow>=2.13.0
+keras>=2.13.0
+opencv-contrib-python>=4.8.0
+kneed>=0.8.0
+kmedoids>=0.5.0
+markov_clustering>=0.0.6
+networkx>=3.0

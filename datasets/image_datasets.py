@@ -111,7 +111,67 @@ class ImageDatasetLoader:
             Tuple of (train_loader, val_loader, test_loader)
         """
         train_transform, test_transform = self.get_transforms()
+        train_dataset, test_dataset = self._build_datasets(train_transform, test_transform)
 
+        # Split training data into train and validation
+        train_size = int((1 - val_split) * len(train_dataset))
+        val_size = len(train_dataset) - train_size
+        train_dataset, val_dataset = random_split(
+            train_dataset,
+            [train_size, val_size],
+            generator=torch.Generator().manual_seed(self.random_seed)
+        )
+
+        # Create data loaders.
+        #
+        # persistent_workers matters here: a run executes one timestep per
+        # epoch and iterates these loaders dozens of times, and without it the
+        # worker processes are torn down and respawned on every single pass.
+        # prefetch_factor keeps batches queued so the device is not waiting on
+        # the input pipeline.
+        loader_options = {
+            'num_workers': num_workers,
+            'pin_memory': torch.cuda.is_available(),
+            'persistent_workers': num_workers > 0,
+        }
+        if num_workers > 0:
+            loader_options['prefetch_factor'] = 4
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            drop_last=False,
+            **loader_options
+        )
+
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            **loader_options
+        )
+
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            **loader_options
+        )
+
+        return train_loader, val_loader, test_loader
+
+    def _build_datasets(self, train_transform, test_transform) -> Tuple[Dataset, Dataset]:
+        """
+        Construct the torchvision train and test datasets, downloading if needed.
+
+        Args:
+            train_transform: Transform applied to the training split
+            test_transform: Transform applied to the test split
+
+        Returns:
+            Tuple of (train_dataset, test_dataset)
+        """
         # Load datasets based on name
         if self.dataset_name == 'mnist':
             train_dataset = datasets.MNIST(
@@ -173,53 +233,68 @@ class ImageDatasetLoader:
             raise NotImplementedError(f"Dataset {self.dataset_name} not yet implemented. "
                                     f"Supported: {list(self.dataset_configs.keys())}")
 
-        # Split training data into train and validation
-        train_size = int((1 - val_split) * len(train_dataset))
-        val_size = len(train_dataset) - train_size
-        train_dataset, val_dataset = random_split(
-            train_dataset,
-            [train_size, val_size],
-            generator=torch.Generator().manual_seed(self.random_seed)
-        )
+        return train_dataset, test_dataset
 
-        # Create data loaders.
-        #
-        # persistent_workers matters here: a run executes one timestep per
-        # epoch and iterates these loaders dozens of times, and without it the
-        # worker processes are torn down and respawned on every single pass.
-        # prefetch_factor keeps batches queued so the device is not waiting on
-        # the input pipeline.
-        loader_options = {
-            'num_workers': num_workers,
-            'pin_memory': torch.cuda.is_available(),
-            'persistent_workers': num_workers > 0,
-        }
-        if num_workers > 0:
-            loader_options['prefetch_factor'] = 4
+    def load_arrays(
+        self,
+        num_train: int,
+        num_test: int = 0,
+        scale_255: bool = True,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Load a fixed sample of the dataset as raw numpy arrays.
 
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            drop_last=False,
-            **loader_options
-        )
+        The clustering composition application needs the data as arrays rather
+        than as loaders: it clusters one fixed sample of instances and carries
+        those clusters across timesteps, so it must hold the same instances
+        throughout rather than iterate fresh batches.
 
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            **loader_options
-        )
+        No augmentation and no normalisation is applied. That is deliberate -
+        the pretrained feature extractors used by the clustering design space
+        are Keras models that apply their own ``preprocess_input``, which
+        expects raw 0-255 pixels; handing them already-normalised tensors
+        puts the input off the scale the donor network was trained on.
 
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            **loader_options
-        )
+        Args:
+            num_train: Number of training instances to sample
+            num_test: Number of held-out test instances to sample
+            scale_255: Return pixels on 0-255 rather than 0-1
 
-        return train_loader, val_loader, test_loader
+        Returns:
+            Tuple of (train_images, train_labels, test_images, test_labels),
+            images shaped (N, C, H, W)
+        """
+        to_tensor = transforms.Compose([transforms.ToTensor()])
+        train_dataset, test_dataset = self._build_datasets(to_tensor, to_tensor)
+
+        def take(dataset, count: int) -> Tuple[np.ndarray, np.ndarray]:
+            if count <= 0:
+                return np.empty((0,)), np.empty((0,))
+
+            count = min(count, len(dataset))
+            # A fixed shuffled prefix, so the sample is class-balanced in
+            # expectation rather than being whatever order the files are in -
+            # CIFAR's test split is not shuffled on disk.
+            generator = torch.Generator().manual_seed(self.random_seed)
+            indices = torch.randperm(len(dataset), generator=generator)[:count].tolist()
+
+            images = []
+            labels = []
+            for index in indices:
+                image, label = dataset[index]
+                images.append(image.numpy())
+                labels.append(label)
+
+            images = np.asarray(images, dtype=np.float32)
+            if scale_255:
+                images = images * 255.0
+
+            return images, np.asarray(labels)
+
+        train_images, train_labels = take(train_dataset, num_train)
+        test_images, test_labels = take(test_dataset, num_test)
+
+        return train_images, train_labels, test_images, test_labels
 
     def get_dataset_info(self) -> dict:
         """

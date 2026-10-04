@@ -2,11 +2,11 @@ import time
 from scipy.spatial.distance import cdist
 import gc
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering
-from applications.clustering_composition.cluster import cluster
+from clustering_composition.cluster import cluster
 import numpy as np
 import random
 from scipy.spatial.distance import cdist
-from dataset.utils import get_images_for_label, get_image_indices_for_label
+from clustering_composition.label_utils import get_images_for_label, get_image_indices_for_label, new_identifiers, new_identifier
 
 # operates on a single image
 def flatten_or_return(vec, expected_shape=1):
@@ -158,7 +158,7 @@ def split_clusters_random_ward_criterion(data, clusters, distance_metric):
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -197,7 +197,7 @@ def split_clusters_random_eigenvalues(data, clusters, distance_metric):
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 	
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -240,7 +240,7 @@ def split_clusters_with_most_dataset_instances_by_eigenvalues(data, clusters, di
 		clusters_ = spec.fit(data_)
 		clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 		unique_labels = np.unique(clusters_.labels_)
-		new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+		new_unique_labels = new_identifiers(len(unique_labels))
 
 		for idx1, item in enumerate(clusters_.labels_):
 			for idx2, ul in enumerate(unique_labels):
@@ -279,7 +279,7 @@ def split_clusters_with_most_dataset_instances_by_ward_criterion(data, clusters,
 	clusters_ = wrd.fit(data_)
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -326,7 +326,7 @@ def split_clusters_by_ward_criterion(data, clusters, distance_metric):
 	clusters_ = wrd.fit(data_)
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -368,7 +368,7 @@ def split_clusters_by_eigenvalues(data, clusters, distance_metric):
 	clusters_ = spec.fit(points)
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -412,7 +412,7 @@ def split_clusters_by_criterion_using_agglomeration(data, clusters, distance_met
 		clusters_ = wrd.fit(data_)
 		clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 		unique_labels = np.unique(clusters_.labels_)
-		new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+		new_unique_labels = new_identifiers(len(unique_labels))
 
 		for idx1, item in enumerate(clusters_.labels_):
 			for idx2, ul in enumerate(unique_labels):
@@ -447,7 +447,7 @@ def split_clusters_by_criterion_using_agglomeration(data, clusters, distance_met
 		clusters_ = wrd.fit(data_)
 		clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 		unique_labels = np.unique(clusters_.labels_)
-		new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+		new_unique_labels = new_identifiers(len(unique_labels))
 
 		for idx1, item in enumerate(clusters_.labels_):
 			for idx2, ul in enumerate(unique_labels):
@@ -485,7 +485,7 @@ def split_clusters_by_criterion_using_agglomeration(data, clusters, distance_met
 		clusters_ = wrd.fit(data_)
 		clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 		unique_labels = np.unique(clusters_.labels_)
-		new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+		new_unique_labels = new_identifiers(len(unique_labels))
 
 		for idx1, item in enumerate(clusters_.labels_):
 			for idx2, ul in enumerate(unique_labels):

@@ -86,7 +86,9 @@ class GroupScale(object):
     """
 
     def __init__(self, size, interpolation=Image.BILINEAR):
-        self.worker = torchvision.transforms.Scale(size, interpolation)
+        # torchvision renamed Scale to Resize in 0.4 and later removed the old
+        # name, so GroupScale raised AttributeError on any current install.
+        self.worker = torchvision.transforms.Resize(size, interpolation)
 
     def __call__(self, img_group):
         return [self.worker(img) for img in img_group]
@@ -277,7 +279,9 @@ class ToTorchFormatTensor(object):
             img = torch.from_numpy(pic).permute(2, 0, 1).contiguous()
         else:
             # handle PIL Image
-            img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
+            # torch.ByteStorage.from_buffer is part of the typed-storage API
+            # PyTorch has been removing; frombuffer is the supported route.
+            img = torch.frombuffer(bytearray(pic.tobytes()), dtype=torch.uint8)
             img = img.view(pic.size[1], pic.size[0], len(pic.mode))
             # put it from HWC to CHW format
             # yikes, this transpose takes 80% of the loading time/CPU

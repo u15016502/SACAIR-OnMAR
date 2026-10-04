@@ -1,7 +1,7 @@
 import time
 from scipy.spatial.distance import cdist
 from sklearn.cluster import OPTICS, Birch, BisectingKMeans
-from applications.clustering_composition.cluster import cluster
+from clustering_composition.cluster import cluster
 import numpy as np
 import random
 import math
@@ -10,7 +10,7 @@ from scipy.spatial.distance import cdist
 import multiprocessing as mp
 import os
 from sklearn.cluster import MiniBatchKMeans
-from dataset.utils import get_images_for_label, get_image_indices_for_label
+from clustering_composition.label_utils import get_images_for_label, get_image_indices_for_label, new_identifiers, new_identifier
 
 # operates on a single image
 def flatten_or_return(vec, expected_shape=1):
@@ -165,7 +165,7 @@ def initialize_centroids_birch(data):
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -182,7 +182,7 @@ def initialize_centroids_optics(data, distance_metric):
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):
@@ -198,7 +198,7 @@ def initialize_centroids_bisecting_kmeans(data, num_clusters):
 	clusters_.labels_ = clusters_.labels_.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_.labels_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_.labels_):
 		for idx2, ul in enumerate(unique_labels):

@@ -6,8 +6,10 @@ This script runs OnMAR (accuracy-prediction), OnMAR (design-prediction),
 OffMAR (accuracy-prediction), OffMAR (design-prediction), and AutoSklearn
 on all datasets for the specified application.
 
-Supports three applications:
+Supports five applications:
 - CNN (Configuration): mnist, fashion-mnist, cifar-10, cifar-100
+- Clustering (Composition): mnist, fashion-mnist, cifar-10, cifar-100
+- Video (Configuration): synthetic, ucf101, hmdb51
 - Segmentation (Composition): bsd500, covid, pascal
 - FuzzyART (Generation): chatgpt, enron, imdb
 
@@ -17,6 +19,12 @@ Usage:
     # CNN application
     python runner.py --application cnn --datasets mnist cifar-10 --timesteps 50 --runs 30
     python runner.py --application cnn --all-datasets --timesteps 50 --runs 30
+
+    # Clustering composition application
+    python runner.py --application clustering --datasets mnist --timesteps 60 --runs 30
+
+    # Video configuration application (synthetic needs no download)
+    python runner.py --application video --datasets synthetic --timesteps 100 --runs 30
 
     # Segmentation application
     python runner.py --application segmentation --datasets bsd500 --timesteps 60 --runs 30
@@ -132,6 +140,38 @@ except ImportError as e:
     SEGMENTATION_CONFIG_OFFMAR_DES = None
 
 try:
+    from applications.composition.clustering.clustering_application import ClusteringCompositionApplication
+    CLUSTERING_AVAILABLE = True
+    CLUSTERING_CONFIG_ONMAR_ACC = onmar_acc_config.CLUSTERING_CONFIG
+    CLUSTERING_CONFIG_ONMAR_DES = onmar_des_config.CLUSTERING_CONFIG
+    CLUSTERING_CONFIG_OFFMAR_ACC = offmar_acc_config.CLUSTERING_CONFIG
+    CLUSTERING_CONFIG_OFFMAR_DES = offmar_des_config.CLUSTERING_CONFIG
+except ImportError as e:
+    print(f"Warning: Clustering application not available: {e}")
+    ClusteringCompositionApplication = None
+    CLUSTERING_AVAILABLE = False
+    CLUSTERING_CONFIG_ONMAR_ACC = None
+    CLUSTERING_CONFIG_ONMAR_DES = None
+    CLUSTERING_CONFIG_OFFMAR_ACC = None
+    CLUSTERING_CONFIG_OFFMAR_DES = None
+
+try:
+    from applications.configuration.video.video_application import VideoConfigurationApplication
+    VIDEO_AVAILABLE = True
+    VIDEO_CONFIG_ONMAR_ACC = onmar_acc_config.VIDEO_CONFIG
+    VIDEO_CONFIG_ONMAR_DES = onmar_des_config.VIDEO_CONFIG
+    VIDEO_CONFIG_OFFMAR_ACC = offmar_acc_config.VIDEO_CONFIG
+    VIDEO_CONFIG_OFFMAR_DES = offmar_des_config.VIDEO_CONFIG
+except ImportError as e:
+    print(f"Warning: Video application not available: {e}")
+    VideoConfigurationApplication = None
+    VIDEO_AVAILABLE = False
+    VIDEO_CONFIG_ONMAR_ACC = None
+    VIDEO_CONFIG_ONMAR_DES = None
+    VIDEO_CONFIG_OFFMAR_ACC = None
+    VIDEO_CONFIG_OFFMAR_DES = None
+
+try:
     from applications.generation.fuzzyart.fuzzyart_application import FuzzyARTGenerationApplication
     FUZZYART_AVAILABLE = True
     FUZZYART_CONFIG_ONMAR_ACC = onmar_acc_config.FUZZYART_CONFIG
@@ -177,6 +217,38 @@ class ExperimentRunner:
                 'onmar_des': SEGMENTATION_CONFIG_ONMAR_DES,
                 'offmar_acc': SEGMENTATION_CONFIG_OFFMAR_ACC,
                 'offmar_des': SEGMENTATION_CONFIG_OFFMAR_DES
+            }
+        }
+
+    # Add clustering composition if available
+    if CLUSTERING_AVAILABLE:
+        APPLICATION_INFO['clustering'] = {
+            'class': ClusteringCompositionApplication,
+            'datasets': ['mnist', 'fashion-mnist', 'cifar-10', 'cifar-100'],
+            'configs': {
+                'onmar_acc': CLUSTERING_CONFIG_ONMAR_ACC,
+                'onmar_des': CLUSTERING_CONFIG_ONMAR_DES,
+                'offmar_acc': CLUSTERING_CONFIG_OFFMAR_ACC,
+                'offmar_des': CLUSTERING_CONFIG_OFFMAR_DES
+            }
+        }
+
+    # Add video configuration if available.
+    #
+    # 'synthetic' is the generated dataset the application ships with, and it
+    # is listed first because it is the only one that needs no download: the
+    # others require frame-extracted video and list files, which this
+    # repository has no loader to build (see the video application's
+    # docstring).
+    if VIDEO_AVAILABLE:
+        APPLICATION_INFO['video'] = {
+            'class': VideoConfigurationApplication,
+            'datasets': ['synthetic', 'ucf101', 'hmdb51'],
+            'configs': {
+                'onmar_acc': VIDEO_CONFIG_ONMAR_ACC,
+                'onmar_des': VIDEO_CONFIG_ONMAR_DES,
+                'offmar_acc': VIDEO_CONFIG_OFFMAR_ACC,
+                'offmar_des': VIDEO_CONFIG_OFFMAR_DES
             }
         }
 
@@ -731,8 +803,9 @@ def parse_args():
         '--application',
         type=str,
         default='cnn',
-        choices=['cnn', 'segmentation', 'fuzzyart'],
-        help='Application to test (default: cnn). Options: cnn, segmentation, fuzzyart'
+        choices=['cnn', 'clustering', 'video', 'segmentation', 'fuzzyart'],
+        help='Application to test (default: cnn). Options: cnn, clustering, '
+             'video, segmentation, fuzzyart'
     )
 
     parser.add_argument(

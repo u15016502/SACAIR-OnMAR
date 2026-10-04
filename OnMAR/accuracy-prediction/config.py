@@ -151,6 +151,70 @@ FUZZYART_CONFIG = {
 }
 
 
+# Clustering composition.
+#
+# theta_p is 0.65 rather than the thesis's 0.85, and that is a deliberate
+# departure. theta_p is the predicted-accuracy threshold above which OnMAR
+# reuses the current design instead of calling the design algorithm, so it has
+# to sit inside the range of accuracies the application actually reaches or the
+# mechanism never fires. Clustering accuracy measured here on MNIST, over 128
+# instances with the thesis design space, runs to about 0.67 - so at 0.85
+# OnMAR would reuse a design exactly never and degenerate into plain search,
+# which is the same failure the README records for CIFAR-10 in the CNN
+# application. 0.65 is attainable and leaves the reuse-versus-recreate
+# decision live. Raise it towards 0.85 for a larger instance sample, where
+# accuracies are higher.
+CLUSTERING_CONFIG = {
+    'knn': OnMARConfig(
+        meta_learner_type='knn',
+        theta_t=None,  # N/2
+        theta_p=0.65,
+        meta_learner_params={'k': 5}
+    ),
+    'rf': OnMARConfig(
+        meta_learner_type='rf',
+        theta_t=None,  # N/2
+        theta_p=0.65,
+        meta_learner_params={'n_estimators': 100, 'max_depth': None}
+    ),
+    'xgboost': OnMARConfig(
+        meta_learner_type='xgboost',
+        theta_t=None,  # N/2
+        theta_p=0.65,
+        meta_learner_params={'n_estimators': 100, 'max_depth': 6, 'learning_rate': 0.1}
+    ),
+}
+
+# Video classification configuration.
+#
+# theta_p keeps the thesis's 0.85. On the generated dataset that ships with
+# the application (four shapes, so an easy problem) accuracies reach it, so
+# the reuse decision is exercised. On a real benchmark - UCF101 or HMDB51 at
+# the budgets a short run allows - 0.85 will not be reached, and theta_p
+# should be lowered to something inside the attainable range, exactly as for
+# clustering above and for CIFAR-10 in the CNN application.
+VIDEO_CONFIG = {
+    'knn': OnMARConfig(
+        meta_learner_type='knn',
+        theta_t=None,  # N/2
+        theta_p=0.85,
+        meta_learner_params={'k': 5}
+    ),
+    'rf': OnMARConfig(
+        meta_learner_type='rf',
+        theta_t=None,  # N/2
+        theta_p=0.85,
+        meta_learner_params={'n_estimators': 100, 'max_depth': None}
+    ),
+    'xgboost': OnMARConfig(
+        meta_learner_type='xgboost',
+        theta_t=None,  # N/2
+        theta_p=0.85,
+        meta_learner_params={'n_estimators': 100, 'max_depth': 6, 'learning_rate': 0.1}
+    ),
+}
+
+
 # Preset configurations for different scenarios
 
 # Conservative: Higher threshold, later start

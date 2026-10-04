@@ -6,10 +6,11 @@ import torch.nn.parallel
 import torch.optim
 from sklearn.metrics import confusion_matrix
 
-from dataset import TSNDataSet
-from models import TSN
-from transforms import *
-from ops import ConsensusModule
+# Package-relative, as for main.py.
+from video_configuration.dataset import TSNDataSet
+from video_configuration.models import TSN
+from video_configuration.transforms import *
+from video_configuration.ops import ConsensusModule
 
 # options
 parser = argparse.ArgumentParser(

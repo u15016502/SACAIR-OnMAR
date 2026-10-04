@@ -188,7 +188,8 @@ class OffMARAccuracyPrediction:
         samples_after = len(self.knowledge_repository)
         if self.prune_info.get('relaxed'):
             print(
-                f"\n  Note: nothing reached θp={self.theta_p} (best was "
+                f"\n  Note: too few entries reached θp={self.theta_p} to "
+                f"fit on (best was "
                 f"{self.prune_info['best_performance']:.4f}); kept the "
                 f"{self.prune_info['kept']} best entries so the meta-learner "
                 f"still has something to learn from"

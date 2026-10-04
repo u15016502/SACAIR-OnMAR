@@ -1,13 +1,13 @@
 import numpy as np
 from sklearn.metrics import accuracy_score
-from applications.clustering_composition.feature_extraction import *
-from applications.clustering_composition.cluster import cluster
-from applications.clustering_composition.cluster_initialization import *
-from applications.clustering_composition.cluster_creation import * 
-from applications.clustering_composition.cluster_addition import * 
-from applications.clustering_composition.cluster_removal import * 
-from applications.clustering_composition.cluster_merging import * 
-from applications.clustering_composition.cluster_splitting import * 
+from clustering_composition.feature_extraction import *
+from clustering_composition.cluster import cluster
+from clustering_composition.cluster_initialization import *
+from clustering_composition.cluster_creation import * 
+from clustering_composition.cluster_addition import * 
+from clustering_composition.cluster_removal import * 
+from clustering_composition.cluster_merging import * 
+from clustering_composition.cluster_splitting import * 
 
 def get_feature_extraction(feature_extraction, images):
 	

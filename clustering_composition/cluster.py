@@ -1,13 +1,15 @@
-import time
 import numpy as np
+
+from clustering_composition.label_utils import new_identifier
 
 class cluster:
 
 	def __init__(self, identifier=None, centroid=[], vectors=[], vector_indices=[]):
 		if identifier == None:
-			identifier = str(time.time())
-			identifier = identifier.replace('.','')
-			self.identifier = identifier
+			# A counter, not the clock: two clusters built in the same
+			# microsecond used to receive the same identifier and then be
+			# treated as one cluster. See label_utils.new_identifiers.
+			self.identifier = new_identifier()
 		else:
 			self.identifier = identifier
 

@@ -1,0 +1,1 @@
+"""Composition applications module."""

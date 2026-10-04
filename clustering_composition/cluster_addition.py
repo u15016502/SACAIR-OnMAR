@@ -4,10 +4,10 @@ from scipy.spatial.distance import cdist
 import gc
 from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import NearestNeighbors
-from applications.clustering_composition.cluster import cluster
+from clustering_composition.cluster import cluster
 import numpy as np
 from scipy.spatial.distance import cdist
-from dataset.utils import get_images_for_label, get_image_indices_for_label
+from clustering_composition.label_utils import get_images_for_label, get_image_indices_for_label, new_identifiers, new_identifier
 
 def convert_clusters_to_label_representations(data, clusters, membership_limit, distance_metric):
 	labels = []
@@ -186,8 +186,8 @@ def add_to_cluster_using_neighbourhood(data, clusters, membership_limit, distanc
 		return clusters
 
 	unique_labels = list(np.unique([c.identifier for c in clusters]))
-	unique_labels_ = [str(time.time()).replace('.','') for ul in unique_labels]
-	unassigned = str(time.time()).replace('.','')
+	unique_labels_ = new_identifiers(len(unique_labels))
+	unassigned = new_identifier()
 	nearest_neighbours = NearestNeighbors(n_neighbors=10, metric=get_distance_metric(distance_metric))
 	gc.collect()
 	lf = lambda dataset_instance: flatten_or_return(dataset_instance, 1)
@@ -237,7 +237,7 @@ def add_to_cluster_using_centroids(data, clusters, membership_limit, distance_me
 	else:
 		current_clustering = convert_clusters_to_label_representations(data, clusters, membership_limit, distance_metric)
 		unique_labels = list(np.unique([c.identifier for c in clusters]))
-		unique_labels_ = [str(time.time()).replace('.','') for ul in unique_labels]
+		unique_labels_ = new_identifiers(len(unique_labels))
 
 		for idx, dataset_instance in enumerate(data):
 
@@ -277,7 +277,7 @@ def add_to_cluster_using_gaussian_distribution(data, clusters, membership_limit,
 	clusters_ = clusters_.astype(str).tolist()
 
 	unique_labels = np.unique(clusters_)
-	new_unique_labels = [str(time.time()).replace('.','') for ul in unique_labels]
+	new_unique_labels = new_identifiers(len(unique_labels))
 
 	for idx1, item in enumerate(clusters_):
 		for idx2, ul in enumerate(unique_labels):
@@ -305,7 +305,9 @@ def add_to_cluster_ensembled(data, clusters, membership_limit, distance_metric, 
 	centroid_clusters = add_to_cluster_using_centroids(data, clusters, membership_limit, distance_metric)
 	gaussian_clusters = add_to_cluster_using_gaussian_distribution(data, clusters, membership_limit, distance_metric,random_seed=random_seed)
 	unique_labels = list(np.unique([cc.identifier for cc in centroid_clusters])) + list(np.unique([gc.identifier for gc in gaussian_clusters]))
-	unique_labels_ = [str(time.time()).replace('.','') for ul in np.unique([cc.identifier for cc in centroid_clusters])] + [str(time.time()).replace('.','') for ul in np.unique([gc.identifier for gc in gaussian_clusters])]
+	# One fresh identifier per entry of unique_labels, which is already the
+	# concatenation of the two ensembled clusterings' labels.
+	unique_labels_ = new_identifiers(len(unique_labels))
 
 	current_clustering = convert_clusters_to_label_representations(data, clusters, membership_limit, distance_metric)
 	combined_clusters = centroid_clusters + gaussian_clusters

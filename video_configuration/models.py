@@ -1,15 +1,75 @@
-from torch import nn
+"""
+Temporal Segment Networks (TSN) for video classification.
 
-from ops.basic_ops import ConsensusModule, Identity
-from transforms import *
-from torch.nn.init import normal, constant
+Changes from the recovered implementation
+-----------------------------------------
+* Imports are package-relative. ``from ops.basic_ops import ...`` and
+  ``from transforms import *`` only resolved when ``video_configuration/``
+  itself was the working directory, so the module could not be imported from
+  the project root.
+* ``torch.nn.init.normal`` / ``constant`` are the pre-0.4 spellings, long
+  deprecated in favour of the in-place ``normal_`` / ``constant_``.
+* Base models are requested with the ``weights=`` enum rather than a
+  positional ``True``, which torchvision has deprecated since 0.13.
+* ``ConsensusModule`` is given ``num_segments`` and ``k``, which the five
+  consensus functions need (see :mod:`video_configuration.ops.basic_ops`).
+* ``_prepare_base_model`` reports clearly when a base model needs the
+  ``tf_model_zoo`` directory that is not bundled, instead of failing with a
+  bare ``ModuleNotFoundError``.
+"""
+
+import torch
+from torch import nn
+import torchvision
+import numpy as np
+from torch.nn.init import normal_, constant_
+
+from video_configuration.ops.basic_ops import (
+    ConsensusModule, Identity, SegmentConsensus,
+)
+from video_configuration.transforms import (
+    GroupMultiScaleCrop, GroupRandomHorizontalFlip,
+)
+
+
+def _import_model_zoo(base_model: str):
+    """Import ``tf_model_zoo``, explaining how to get it if it is absent.
+
+    The BN-Inception and InceptionV3 base models are defined in a
+    ``tf_model_zoo`` package of 442 files and 51.8 MB, which is not part of
+    this bundle. ResNet and VGG base models do not need it.
+
+    Args:
+        base_model: The base model being requested, for the message.
+
+    Returns:
+        The ``tf_model_zoo`` module.
+
+    Raises:
+        ImportError: If the model zoo is not importable.
+    """
+    try:
+        import tf_model_zoo
+        return tf_model_zoo
+    except ImportError as exc:
+        raise ImportError(
+            f"The base model '{base_model}' is defined in tf_model_zoo, which "
+            f"is not bundled here (442 files, 51.8 MB). Recover it with "
+            f"'git checkout 20e8a896 -- applications/video_configuration/"
+            f"tf_model_zoo' and put it on sys.path, or choose a ResNet or VGG "
+            f"base model, which need no model zoo. "
+            f"VideoConfigurationApplication leaves these base models out of "
+            f"the design space automatically when the zoo is absent."
+        ) from exc
+
 
 class TSN(nn.Module):
     def __init__(self, num_class, num_segments, modality,
                  base_model='resnet101', new_length=None,
                  consensus_type='avg', before_softmax=True,
                  dropout=0.8,
-                 crop_num=1, partial_bn=True):
+                 crop_num=1, partial_bn=True,
+                 consensus_k=3):
         super(TSN, self).__init__()
         self.modality = modality
         self.num_segments = num_segments
@@ -49,7 +109,9 @@ TSN Configurations:
             self.base_model = self._construct_diff_model(self.base_model)
             print("Done. RGBDiff model ready.")
 
-        self.consensus = ConsensusModule(consensus_type)
+        self.consensus = ConsensusModule(
+            consensus_type, k=consensus_k, num_segments=self.num_segments
+        )
 
         if not self.before_softmax:
             self.softmax = nn.Softmax()
@@ -69,17 +131,48 @@ TSN Configurations:
 
         std = 0.001
         if self.new_fc is None:
-            normal(getattr(self.base_model, self.base_model.last_layer_name).weight, 0, std)
-            constant(getattr(self.base_model, self.base_model.last_layer_name).bias, 0)
+            normal_(getattr(self.base_model, self.base_model.last_layer_name).weight, 0, std)
+            constant_(getattr(self.base_model, self.base_model.last_layer_name).bias, 0)
         else:
-            normal(self.new_fc.weight, 0, std)
-            constant(self.new_fc.bias, 0)
+            normal_(self.new_fc.weight, 0, std)
+            constant_(self.new_fc.bias, 0)
         return feature_dim
 
     def _prepare_base_model(self, base_model):
 
-        if 'resnet' in base_model or 'vgg' in base_model:
-            self.base_model = getattr(torchvision.models, base_model)(True)
+        if 'vgg' in base_model:
+            self.base_model = getattr(torchvision.models, base_model)(weights='DEFAULT')
+
+            # TSN swaps a single named attribute for its own head, and the
+            # attribute has to be one the base model's forward actually calls.
+            # torchvision's VGG keeps its head in ``.classifier``, a
+            # Sequential with no ``.in_features``, so the recovered code's
+            # ``last_layer_name = 'fc'`` raised AttributeError for every VGG
+            # design. ``.classifier`` is collapsed to a single Linear here so
+            # that _prepare_tsn can read its width and replace it.
+            #
+            # The consequence is that VGG's pretrained fc6/fc7 blocks are
+            # discarded and only its convolutional features are reused. That
+            # is unavoidable without rewriting _prepare_tsn, and it is the
+            # usual treatment of VGG as a feature extractor - but it does mean
+            # a VGG design starts from less pretrained weight than a ResNet
+            # one does.
+            flattened = self.base_model.classifier[0].in_features
+            self.base_model.classifier = nn.Linear(flattened, flattened)
+            self.base_model.last_layer_name = 'classifier'
+            self.input_size = 224
+            self.input_mean = [0.485, 0.456, 0.406]
+            self.input_std = [0.229, 0.224, 0.225]
+
+            if self.modality == 'Flow':
+                self.input_mean = [0.5]
+                self.input_std = [np.mean(self.input_std)]
+            elif self.modality == 'RGBDiff':
+                self.input_mean = [0.485, 0.456, 0.406] + [0] * 3 * self.new_length
+                self.input_std = self.input_std + [np.mean(self.input_std) * 2] * self.new_length
+
+        elif 'resnet' in base_model:
+            self.base_model = getattr(torchvision.models, base_model)(weights='DEFAULT')
             self.base_model.last_layer_name = 'fc'
             self.input_size = 224
             self.input_mean = [0.485, 0.456, 0.406]
@@ -92,7 +185,7 @@ TSN Configurations:
                 self.input_mean = [0.485, 0.456, 0.406] + [0] * 3 * self.new_length
                 self.input_std = self.input_std + [np.mean(self.input_std) * 2] * 3 * self.new_length
         elif base_model == 'BNInception':
-            import tf_model_zoo
+            tf_model_zoo = _import_model_zoo(base_model)
             self.base_model = getattr(tf_model_zoo, base_model)()
             self.base_model.last_layer_name = 'fc'
             self.input_size = 224
@@ -105,7 +198,7 @@ TSN Configurations:
                 self.input_mean = self.input_mean * (1 + self.new_length)
 
         elif 'inception' in base_model:
-            import tf_model_zoo
+            tf_model_zoo = _import_model_zoo(base_model)
             self.base_model = getattr(tf_model_zoo, base_model)()
             self.base_model.last_layer_name = 'classif'
             self.input_size = 299
@@ -170,6 +263,11 @@ TSN Configurations:
                 # later BN's are frozen
                 if not self._enable_pbn or bn_cnt == 1:
                     bn.extend(list(m.parameters()))
+            elif isinstance(m, SegmentConsensus):
+                # The 'weighted' consensus learns one logit per segment.
+                # Without this branch the check below rejected it as an
+                # unknown atomic module with parameters.
+                normal_weight.extend(list(m.parameters()))
             elif len(m._modules) == 0:
                 if len(list(m.parameters())) > 0:
                     raise ValueError("New atomic module type: {}. Need to give it a learning policy".format(type(m)))

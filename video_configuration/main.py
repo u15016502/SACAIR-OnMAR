@@ -7,12 +7,17 @@ import torchvision
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
-from torch.nn.utils import clip_grad_norm
+# clip_grad_norm_ is the current spelling; clip_grad_norm is its deprecated
+# alias and is on its way out.
+from torch.nn.utils import clip_grad_norm_
 
-from dataset import TSNDataSet
-from models import TSN
-from transforms import *
-from opts import parser
+# Package-relative: these resolved only when video_configuration/ was itself
+# the working directory, so this script could not be imported from anywhere
+# else - including by the test that checks it parses.
+from video_configuration.dataset import TSNDataSet
+from video_configuration.models import TSN
+from video_configuration.transforms import *
+from video_configuration.opts import parser
 
 best_prec1 = 0
 
@@ -179,7 +184,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
         loss.backward()
 
         if args.clip_gradient is not None:
-            total_norm = clip_grad_norm(model.parameters(), args.clip_gradient)
+            total_norm = clip_grad_norm_(model.parameters(), args.clip_gradient)
             if total_norm > args.clip_gradient:
                 print("clipping gradient: {} with coef {}".format(total_norm, args.clip_gradient / total_norm))
 

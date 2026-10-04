@@ -382,8 +382,8 @@ class OnMARDesignPrediction:
 
             if self.prune_info.get('relaxed'):
                 print(
-                    f"  Pruning at θp={self.theta_p}: nothing reached the "
-                    f"threshold (best was "
+                    f"  Pruning at θp={self.theta_p}: too few entries "
+                    f"reached the threshold to fit on (best was "
                     f"{self.prune_info['best_performance']:.4f}); kept the "
                     f"{self.prune_info['kept']} best entries instead"
                 )
